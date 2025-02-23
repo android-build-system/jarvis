@@ -1,0 +1,11 @@
+# Gradle files
+.gradle/
+**/build/
+**/captures/
+
+# Android Studio
+.idea/
+local.properties
+
+# GitHub Actions
+app-debug.apk
