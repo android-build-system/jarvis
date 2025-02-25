@@ -3,7 +3,7 @@ name: Android Build
 on:
   push:
     branches:
-      - staging
+      - master
   workflow_dispatch:
 
 jobs:
