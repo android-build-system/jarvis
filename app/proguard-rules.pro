@@ -1,0 +1,7 @@
+-keep class kotlinx.coroutines.debug.internal.DebugProbesKt { *; }
+-keep class kotlinx.coroutines.debug.** { *; }
+-keep class kotlin.coroutines.jvm.internal.DebugMetadata { *; }
+-keep class kotlinx.coroutines.** { *; }
+-dontwarn kotlinx.coroutines.**
+-assumenosideeffects class kotlinx.coroutines.debug.internal.DebugProbesKt { *; }
+-assumenosideeffects class kotlin.coroutines.jvm.internal.DebugMetadata { *; }

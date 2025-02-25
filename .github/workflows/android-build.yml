@@ -29,10 +29,65 @@ jobs:
       - name: Build APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew clean
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Install Missing Dependencies
+        run: |
+          sudo apt-get update
+          for tool in zipalign apksigner; do
+            command -v $tool &>/dev/null || sudo apt-get install -q -y android-sdk-build-tools
+          done
+
+      - name: Find Build Tools Path
+        run: |
+          BUILD_TOOLS_PATH=$(ls -d $ANDROID_SDK_ROOT/build-tools/* | sort -V | tail -n 1)
+          echo "BUILD_TOOLS_PATH=$BUILD_TOOLS_PATH" >> $GITHUB_ENV
+          echo "Using build-tools from: $BUILD_TOOLS_PATH"
+
+      - name: Align APK
+        run: |
+          APK_UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
+          APK_ALIGNED="app-release-aligned.apk"
+
+          [[ -f "$APK_UNSIGNED" ]] || { echo "ERROR: $APK_UNSIGNED not found!"; ls -R app/build/outputs/apk/release/; exit 1; }
+          
+          if [[ ! -x "$BUILD_TOOLS_PATH/zipalign" ]]; then
+            echo "ERROR: zipalign not found at $BUILD_TOOLS_PATH"
+            exit 1
+          fi
+
+          "$BUILD_TOOLS_PATH/zipalign" -v 4 "$APK_UNSIGNED" "$APK_ALIGNED"
+
+      - name: Decode Signing Key
+        run: |
+          [[ -n "${{ secrets.PRODUCTION_KEYS_1 }}" && -n "${{ secrets.PRODUCTION_KEYS_2 }}" ]] || { echo "ERROR: Missing signing keys!"; exit 1; }
+
+          echo "${{ secrets.PRODUCTION_KEYS_1 }}" | base64 --decode > release-keys.pk8
+          echo "${{ secrets.PRODUCTION_KEYS_2 }}" | base64 --decode > release-keys.x509.pem
+
+          [[ -s release-keys.pk8 && -s release-keys.x509.pem ]] || { echo "ERROR: Invalid signing keys!"; exit 1; }
+
+      - name: Sign APK
+        run: |
+          APK_ALIGNED="app-release-aligned.apk"
+          APK_SIGNED="app-release-signed.apk"
+
+          [[ -f "$APK_ALIGNED" ]] || { echo "ERROR: $APK_ALIGNED not found!"; exit 1; }
+          "$BUILD_TOOLS_PATH/apksigner" sign --key release-keys.pk8 --cert release-keys.x509.pem --out "$APK_SIGNED" "$APK_ALIGNED"
+
+      - name: Verify APK Signature
+        run: |
+          APK_SIGNED="app-release-signed.apk"
+
+          [[ -f "$APK_SIGNED" ]] || { echo "ERROR: $APK_SIGNED not found!"; exit 1; }
+          "$BUILD_TOOLS_PATH/apksigner" verify --verbose --print-certs "$APK_SIGNED"
+
+      - name: Cleanup
+        run: rm -f release-keys.pk8 release-keys.x509.pem app-release-aligned.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: jarvis
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app-release-signed.apk
